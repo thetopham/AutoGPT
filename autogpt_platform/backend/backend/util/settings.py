@@ -3,7 +3,7 @@ import os
 from enum import Enum
 from typing import Any, Dict, Generic, List, Set, Tuple, Type, TypeVar
 
-from pydantic import BaseModel, Field, PrivateAttr, field_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, validator
 from pydantic_settings import (
     BaseSettings,
     JsonConfigSettingsSource,
@@ -83,6 +83,21 @@ class Config(UpdateTrackingModel["Config"], BaseSettings):
     )
     # Add more configuration fields as needed
 
+    # --- New Configuration Fields Start ---
+    email_retrieve_protocol: str = Field(
+        default="imap",
+        description="Default protocol for retrieving emails: 'imap' or 'pop3'",
+    )
+    email_retrieve_server: str = Field(
+        default="imap.gmail.com",
+        description="Default email server address for retrieving emails",
+    )
+    email_retrieve_port: int = Field(
+        default=993,
+        description="Default port number for email retrieval (993 for IMAP, 995 for POP3)",
+    )
+    # --- New Configuration Fields End ---
+
     model_config = SettingsConfigDict(
         json_file=[
             get_config_path() / "config.default.json",
@@ -151,7 +166,7 @@ class Config(UpdateTrackingModel["Config"], BaseSettings):
         out = []
         port = None
         has_localhost = False
-        has_127_0_0_1 = False
+        has_127_0_1 = False
         for url in v:
             url = url.strip()
             if url.startswith(("http://", "https://")):
@@ -160,17 +175,23 @@ class Config(UpdateTrackingModel["Config"], BaseSettings):
                     has_localhost = True
                 if "127.0.0.1" in url:
                     port = url.split(":")[2]
-                    has_127_0_0_1 = True
+                    has_127_0_1 = True
                 out.append(url)
             else:
                 raise ValueError(f"Invalid URL: {url}")
 
-        if has_127_0_0_1 and not has_localhost:
+        if has_127_0_1 and not has_localhost:
             out.append(f"http://localhost:{port}")
-        if has_localhost and not has_127_0_0_1:
+        if has_localhost and not has_127_0_1:
             out.append(f"http://127.0.0.1:{port}")
 
         return out
+
+    @validator("email_retrieve_protocol")
+    def validate_protocol(cls, v):
+        if v.lower() not in {"imap", "pop3"}:
+            raise ValueError("protocol must be either 'imap' or 'pop3'")
+        return v.lower()
 
     @classmethod
     def settings_customise_sources(
@@ -237,6 +258,15 @@ class Secrets(UpdateTrackingModel["Secrets"], BaseSettings):
     smtp_port: str = Field(default="", description="SMTP server port")
     smtp_username: str = Field(default="", description="SMTP username")
     smtp_password: str = Field(default="", description="SMTP password")
+
+    # --- New Secret Fields Start ---
+    email_retrieve_username: str = Field(
+        default="", description="Username for email retrieval (IMAP/POP3)"
+    )
+    email_retrieve_password: str = Field(
+        default="", description="Password for email retrieval (IMAP/POP3)"
+    )
+    # --- New Secret Fields End ---
 
     sentry_dsn: str = Field(default="", description="Sentry DSN")
 
